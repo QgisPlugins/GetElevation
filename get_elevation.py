@@ -21,12 +21,22 @@
  ***************************************************************************/
 """
 from PyQt4.QtCore import QSettings, QTranslator, qVersion, QCoreApplication
-from PyQt4.QtGui import QAction, QIcon
+from PyQt4.QtGui import QAction, QIcon, QFileDialog, QProgressBar
+from qgis.gui import QgsMessageBar
+from qgis.core import QgsGeometry, QgsFeatureRequest, QgsSpatialIndex, QgsVectorLayer, QgsFeature, QgsPoint, QgsMapLayerRegistry, QgsVectorFileWriter, QgsProject
 # Initialize Qt resources from file resources.py
 import resources
+# Import libs and the external geographiclib
+import timeit, math, sys, os.path; sys.path.append(os.path.dirname(os.path.abspath(__file__)) + "/libs")
+from geographiclib.geodesic import Geodesic
 # Import the code for the dialog
 from get_elevation_dialog import GetElevationDialog
 import os.path
+# Importando bibliotecas necessarias
+from xml.etree.ElementTree import ElementTree
+import json
+import urllib.request
+import urllib.parse
 
 
 class GetElevation:
@@ -180,14 +190,136 @@ class GetElevation:
         del self.toolbar
 
 
+    def showMessage(self, message, level=QgsMessageBar.INFO):
+        """Pushes a message to the Message Bar"""
+        self.iface.messageBar().pushMessage(message, level, self.iface.messageTimeout())
+
+
+    def populate(self):
+        """Populate the dropdown menu with point vector layers"""
+        self.dlg.layersInput.clear()
+        for legend in QgsProject.instance().layerTreeRoot().findLayers():
+            layer = QgsMapLayerRegistry.instance().mapLayer(legend.layerId())
+            if type(layer) == QgsVectorLayer and layer.geometryType() == 0:
+                self.dlg.layersInput.addItem(layer.name())
+
+
+    def get_elevation(self,x,y):
+        #CONSTROI A URL PARA A BUSCA DO JSON
+        url = 'http://maps.googleapis.com/maps/api/elevation/json?locations='+str(y)+','+str(x)+'&sensor=false'
+        #RECUPERA O JSON
+        f = urllib.request.urlopen(url)
+        data = f.read().decode('utf-8')
+        #PEGA A ELEVACAO
+        json_data = json.loads(data)
+        elevation = json_data['results'][0]['elevation']
+        #RETORNA A ELEVACAO DA COORDENADA PASSADA
+        return elevation
+
+
     def run(self):
         """Run method that performs all the real work"""
-        # show the dialog
+        #carrega camadas no combobox
+        self.populate()
+        # exibe a caixa de dialogo
         self.dlg.show()
-        # Run the dialog event loop
+        # carrega a caixa de dialogo em loop
         result = self.dlg.exec_()
         # See if OK was pressed
         if result:
-            # Do something useful here - delete the line containing pass and
-            # substitute with your code.
+            tic=timeit.default_timer()
+            # Obtem todas as camadas validas no projeto
+            point_layers = []
+            layers = QgsMapLayerRegistry.instance().mapLayers()
+            for name, layer in layers.iteritems():
+                # Verifica o tipo da camada selecionada (0 for points, 1 for lines, and 2 for polygons)
+                if type(layer) == QgsVectorLayer and layer.geometryType() == 0:
+                    point_layers.append(layer)
+            if len(point_layers) == 0:
+                self.showMessage(self.tr('Nenhuma camada disponivel. Adicione uma camada do tipo pontos ao projeto.'), QgsMessageBar.WARNING)
+                return
+
+            # Obtem o nome da camada selecionada
+            layer_name = self.dlg.layersInput.currentText()
+            inputLayer = QgsMapLayerRegistry.instance().mapLayersByName(layer_name)[0]
+            # Verifica se o SRC eh WGS84 (EPSG:4326)
+            if inputLayer.crs().authid() != u'EPSG:4326':
+                self.showMessage(self.tr('A camada selecionada deve estar em coordenadas geograficas (WGS 84, EPSG 4326).'), QgsMessageBar.WARNING)
+                return
+            # Verifica se foi definido um caminho para o arquivo de saida
+            elif (self.dlg.fileOutput.isChecked() and self.dlg.outputFileName.text() == ''):
+                self.showMessage(self.tr('Erro, nao foi definido um arquivo de saida.'),QgsMessageBar.WARNING)
+                return
+
+            # Retorna a camada de saida
+            if self.dlg.fileOutput.isChecked():
+                shapefilename = self.dlg.outputFileName.text()
+
+            # Restringir somente para feicoes selecionadas
+            if inputLayer.selectedFeatures():
+                features = inputLayer.selectedFeatures()
+            else:
+                features = inputLayer.getFeatures()
+
+            # Criar camada na memoria para os dados de saida
+            crsString = inputLayer.crs().authid()
+            outputLayer = QgsVectorLayer("Point?crs=" + crsString+"&field=id:integer&field=name:string(20)&field=x:double(20)&field=y:double(20)&field=elev:double(20)&index=yes", "GetElevation_"+inputLayer.name(), "memory")
+            pr = outputLayer.dataProvider()
+            outFeat = QgsFeature()
+
+            # Obtem a lista de pontos para processamento
+            points = []
+            for feature in features:
+                points.append(feature.geometry().asPoint())
+
+            print(points)
+
+            # Prepara a barra de progresso
+            progressMessageBar = self.iface.messageBar()
+            progress = QProgressBar()
+            progress.setMaximum(100) 
+            progressMessageBar.pushWidget(progress)
+            def triangular(number):
+                tn = 0
+                for i in xrange(1, number+1):
+                    tn += i
+                return tn
+            lines_total = triangular(len(points)-1)
+
+            # Cria os pontos
+            i=1
+            for point in points:
+                print(i)
+                x = point[0]
+                y = point[1]
+                z = self.get_elevation(x,y)
+                print(str(i)+" - "+str(x)+" - "+str(y)+" - "+str(z))
+                # Cria o ponto
+                thePoint = QgsPoint(x,y)
+                point = QgsGeometry.fromPoint(thePoint)
+                outFeat.setGeometry(point)
+                # Adiciona os atributos ao ponto
+                outFeat.setAttributes([i,'ponto '+str(i),x,y,z])
+                pr.addFeatures([outFeat])
+
+                i=i+1
+
+
+
+            # Redefine a barra de progresso
+            self.iface.messageBar().clearWidgets()
+            toc=timeit.default_timer()
+
+            # Salva o arquivo na memoria ou em arquivo
+            if self.dlg.memoryOutput.isChecked():  # Load memory layer in canvas
+                QgsMapLayerRegistry.instance().addMapLayer(outputLayer)
+            
+            elif self.dlg.fileOutput.isChecked():  # Save shapefile
+                QgsVectorFileWriter.writeAsVectorFormat(outputLayer, shapefilename, "utf-8", None, "ESRI Shapefile")
+
+            #exibe amensagem de concluido e fecha a janela
+            self.showMessage(self.tr('Concluido!'), QgsMessageBar.SUCCESS)
+            self.dlg.close()
+
+
             pass

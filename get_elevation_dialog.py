@@ -39,3 +39,126 @@ class GetElevationDialog(QtGui.QDialog, FORM_CLASS):
         # http://qt-project.org/doc/qt-4.8/designer-using-a-ui-file.html
         # #widgets-and-dialogs-with-auto-connect
         self.setupUi(self)
+        self.input_mode_default()
+        self.outputSelectFileName.clicked.connect(self.browseSaveOutput)
+        self.layerInputMode.toggled.connect(self.radio_input_layer)
+        self.extentInputMode.toggled.connect(self.radio_input_extent)
+        self.fileOutput.toggled.connect(self.radio_output)
+        self.oldPath = ''
+
+    ###################
+    #INPUT
+    ###################
+
+    def input_mode_default(self):
+        self.labelLayer.setVisible(True)
+        self.layersInput.setVisible(True)
+        self.labelExtent.setVisible(False)
+        self.labelExtentN.setVisible(False)
+        self.labelExtentS.setVisible(False)
+        self.labelExtentL.setVisible(False)
+        self.labelExtentW.setVisible(False)
+        self.labelExtentInterval.setVisible(False)
+        self.extentInputInterval.setVisible(False)
+        self.extentInputN.setVisible(False)
+        self.extentInputS.setVisible(False)
+        self.extentInputL.setVisible(False)
+        self.extentInputW.setVisible(False)
+
+    def radio_input_layer(self):
+        """Choose between output as memory layer or as shapefile"""
+        if self.layerInputMode.isChecked():
+            self.labelLayer.setEnabled(True)
+            self.layersInput.setEnabled(True)
+            self.labelLayer.setVisible(True)
+            self.layersInput.setVisible(True)
+        else:
+            self.labelLayer.setEnabled(False)
+            self.layersInput.clear()
+            self.layersInput.setEnabled(False)
+            self.labelLayer.setVisible(False)
+            self.layersInput.setVisible(False)
+
+    def radio_input_extent(self):
+        """Choose between output as memory layer or as shapefile"""
+        if self.extentInputMode.isChecked():
+            self.labelExtent.setEnabled(True)
+            self.labelExtentN.setEnabled(True)
+            self.labelExtentS.setEnabled(True)
+            self.labelExtentL.setEnabled(True)
+            self.labelExtentW.setEnabled(True)
+            self.labelExtentInterval.setEnabled(True)
+            self.extentInputInterval.setEnabled(True)
+            self.extentInputN.setEnabled(True)
+            self.extentInputS.setEnabled(True)
+            self.extentInputL.setEnabled(True)
+            self.extentInputW.setEnabled(True)
+            self.labelExtent.setVisible(True)
+            self.labelExtentN.setVisible(True)
+            self.labelExtentS.setVisible(True)
+            self.labelExtentL.setVisible(True)
+            self.labelExtentW.setVisible(True)
+            self.labelExtentInterval.setVisible(True)
+            self.extentInputInterval.setVisible(True)
+            self.extentInputN.setVisible(True)
+            self.extentInputS.setVisible(True)
+            self.extentInputL.setVisible(True)
+            self.extentInputW.setVisible(True)
+        else:
+            self.labelExtent.setEnabled(False)
+            self.labelExtentN.setEnabled(False)
+            self.labelExtentS.setEnabled(False)
+            self.labelExtentL.setEnabled(False)
+            self.labelExtentW.setEnabled(False)
+            self.labelExtentInterval.setEnabled(False)
+            self.extentInputInterval.clear()
+            self.extentInputInterval.setEnabled(False)
+            self.extentInputN.clear()
+            self.extentInputN.setEnabled(False)
+            self.extentInputS.clear()
+            self.extentInputS.setEnabled(False)
+            self.extentInputL.clear()
+            self.extentInputL.setEnabled(False)
+            self.extentInputW.clear()
+            self.extentInputW.setEnabled(False)
+            self.labelExtent.setVisible(False)
+            self.labelExtentN.setVisible(False)
+            self.labelExtentS.setVisible(False)
+            self.labelExtentL.setVisible(False)
+            self.labelExtentW.setVisible(False)
+            self.labelExtentInterval.setVisible(False)
+            self.extentInputInterval.setVisible(False)
+            self.extentInputN.setVisible(False)
+            self.extentInputS.setVisible(False)
+            self.extentInputL.setVisible(False)
+            self.extentInputW.setVisible(False)
+
+
+
+    ###################
+    #OUTPUT
+    ###################
+
+    def browseSaveOutput(self):
+        """Opens a window to set the location of the output file."""
+        fileName0 = QtGui.QFileDialog.getSaveFileName(self, 'Salvar arquivo', self.oldPath, "Shapefile (*.shp);;Todos os arquivos (*)")
+        fileName = os.path.splitext(str(fileName0))[0]+'.shp'
+        if os.path.splitext(str(fileName0))[0] != '':
+            self.oldPath = os.path.dirname(fileName)
+        layername = os.path.splitext(os.path.basename(str(fileName)))[0]
+        if (layername=='.shp'):
+            return
+        self.outputFileName.setText(fileName)
+
+    def radio_output(self):
+        """Choose between output as memory layer or as shapefile"""
+        if self.fileOutput.isChecked():
+            self.labelOutputFileName.setEnabled(True)
+            self.outputFileName.setEnabled(True)
+            self.outputSelectFileName.setEnabled(True)
+        else:
+            self.labelOutputFileName.setEnabled(False)
+            self.outputFileName.clear()
+            self.outputFileName.setEnabled(False)
+            self.outputSelectFileName.setEnabled(False)
+
