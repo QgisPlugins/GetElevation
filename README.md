@@ -21,3 +21,5 @@ A API Google Maps apresenta um limite de consultas, por este motivo, caso seja c
 
 ## Créditos
 Este plugin foi desenvolvido por Rodrigo Sousa.
+
+A melhor forma de referenciar o uso do plugin é: SOUSA, F. R. C. <strong>Get Elevation</strong>. Disponível em: <https://github.com/QgisPlugins/GetElevation/>. Acesso em: 15 mai 2018.
