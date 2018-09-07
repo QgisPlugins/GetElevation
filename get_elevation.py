@@ -206,7 +206,7 @@ class GetElevation:
 
     def get_elevation(self,x,y):
         #CONSTROI A URL PARA A BUSCA DO JSON
-        url = 'http://maps.googleapis.com/maps/api/elevation/json?locations='+str(y)+','+str(x)+'&sensor=false'
+        url = 'http://maps.googleapis.com/maps/api/elevation/json?&locations='+str(y)+','+str(x)+'&sensor=false'
         #RECUPERA O JSON
         f = urllib.request.urlopen(url)
         data = f.read().decode('utf-8')
@@ -216,6 +216,27 @@ class GetElevation:
         #RETORNA A ELEVACAO DA COORDENADA PASSADA
         return elevation
 
+    def get_points_by_extent(self, xmin, xmax, ymin, ymax, interval):
+        xmin = float(xmin)
+        xmax = float(xmax)
+        ymin = float(ymin)
+        ymax = float(ymax)
+        interval = float(interval)
+        xextent = xmax-xmin
+        yextent = ymax-ymin
+        xrangee = int(xextent/interval)
+        yrangee = int(yextent/interval)
+        points = []
+        i=1
+        for x in range(0, xrangee):
+            xx = (x*interval)+xmin
+            for y in range(0, yrangee):
+                yy = (y*interval)+ymin
+                #print(i)
+                #print("x:"+str(xx)+" y:"+str(yy))
+                points.append([xx,yy])
+                i=i+1
+        return(points)
 
     def run(self):
         """Run method that performs all the real work"""
@@ -235,17 +256,19 @@ class GetElevation:
                 # Verifica o tipo da camada selecionada (0 for points, 1 for lines, and 2 for polygons)
                 if type(layer) == QgsVectorLayer and layer.geometryType() == 0:
                     point_layers.append(layer)
-            if len(point_layers) == 0:
-                self.showMessage(self.tr('Nenhuma camada disponivel. Adicione uma camada do tipo pontos ao projeto.'), QgsMessageBar.WARNING)
-                return
+            # Verifica se exite camadas de pontos carregadas
+            if self.dlg.layerInputMode.isChecked():
+                if len(point_layers) == 0:
+                    self.showMessage(self.tr('Nenhuma camada disponivel. Adicione uma camada do tipo pontos ao projeto.'), QgsMessageBar.WARNING)
+                    return
 
-            # Obtem o nome da camada selecionada
-            layer_name = self.dlg.layersInput.currentText()
-            inputLayer = QgsMapLayerRegistry.instance().mapLayersByName(layer_name)[0]
-            # Verifica se o SRC eh WGS84 (EPSG:4326)
-            if inputLayer.crs().authid() != u'EPSG:4326':
-                self.showMessage(self.tr('A camada selecionada deve estar em coordenadas geograficas (WGS 84, EPSG 4326).'), QgsMessageBar.WARNING)
-                return
+                # Obtem o nome da camada selecionada
+                layer_name = self.dlg.layersInput.currentText()
+                inputLayer = QgsMapLayerRegistry.instance().mapLayersByName(layer_name)[0]
+                # Verifica se o SRC eh WGS84 (EPSG:4326)
+                if inputLayer.crs().authid() != u'EPSG:4326':
+                    self.showMessage(self.tr('A camada selecionada deve estar em coordenadas geograficas (WGS 84, EPSG 4326).'), QgsMessageBar.WARNING)
+                    return
             # Verifica se foi definido um caminho para o arquivo de saida
             elif (self.dlg.fileOutput.isChecked() and self.dlg.outputFileName.text() == ''):
                 self.showMessage(self.tr('Erro, nao foi definido um arquivo de saida.'),QgsMessageBar.WARNING)
@@ -256,44 +279,58 @@ class GetElevation:
                 shapefilename = self.dlg.outputFileName.text()
 
             # Restringir somente para feicoes selecionadas
-            if inputLayer.selectedFeatures():
-                features = inputLayer.selectedFeatures()
+            if self.dlg.layerInputMode.isChecked():
+                if inputLayer.selectedFeatures():
+                    features = inputLayer.selectedFeatures()
+                else:
+                    features = inputLayer.getFeatures()
+                outputName = inputLayer.name()
+                crsString = inputLayer.crs().authid()
             else:
-                features = inputLayer.getFeatures()
+                outputName = "Grade_Regular"
+                crsString = "EPSG:4326"
 
             # Criar camada na memoria para os dados de saida
-            crsString = inputLayer.crs().authid()
-            outputLayer = QgsVectorLayer("Point?crs=" + crsString+"&field=id:integer&field=name:string(20)&field=x:double(20)&field=y:double(20)&field=elev:double(20)&index=yes", "GetElevation_"+inputLayer.name(), "memory")
+            outputLayer = QgsVectorLayer("Point?crs=" + crsString+"&field=id:integer&field=name:string(20)&field=x:double(20)&field=y:double(20)&field=elev:double(20)&index=yes", "GetElevation_"+outputName, "memory")
             pr = outputLayer.dataProvider()
             outFeat = QgsFeature()
 
+
+
             # Obtem a lista de pontos para processamento
             points = []
-            for feature in features:
-                points.append(feature.geometry().asPoint())
 
-            print(points)
+            if self.dlg.layerInputMode.isChecked():
+                for feature in features:
+                    points.append(feature.geometry().asPoint())
+            elif self.dlg.extentInputMode.isChecked():
+                xmin = self.dlg.extentInputW.text()
+                xmax = self.dlg.extentInputL.text()
+                ymin = self.dlg.extentInputS.text()
+                ymax = self.dlg.extentInputN.text()
+                interval = self.dlg.extentInputInterval.text()
+                points = self.get_points_by_extent(xmin,xmax,ymin,ymax,interval)
+
+
 
             # Prepara a barra de progresso
             progressMessageBar = self.iface.messageBar()
             progress = QProgressBar()
             progress.setMaximum(100) 
             progressMessageBar.pushWidget(progress)
-            def triangular(number):
-                tn = 0
-                for i in xrange(1, number+1):
-                    tn += i
-                return tn
-            lines_total = triangular(len(points)-1)
+            lines_total = len(points)-1
+            print("Iniciando a consulta da elevacao de um total de "+str(lines_total)+" pontos.")
+
+
+            print(points)
 
             # Cria os pontos
             i=1
             for point in points:
-                print(i)
                 x = point[0]
                 y = point[1]
                 z = self.get_elevation(x,y)
-                print(str(i)+" - "+str(x)+" - "+str(y)+" - "+str(z))
+                print(str(i)+" => "+str(x)+", "+str(y)+", "+str(z))
                 # Cria o ponto
                 thePoint = QgsPoint(x,y)
                 point = QgsGeometry.fromPoint(thePoint)
@@ -302,7 +339,13 @@ class GetElevation:
                 outFeat.setAttributes([i,'ponto '+str(i),x,y,z])
                 pr.addFeatures([outFeat])
 
+                # Set progress
+                percent = (i/float(lines_total)) * 100
+                progress.setValue(percent)
+
                 i=i+1
+
+
 
 
 

@@ -21,9 +21,16 @@
  ***************************************************************************/
 """
 
-import os
 
-from PyQt4 import QtGui, uic
+from qgis.core import *
+from qgis.gui import *
+from qgis.utils import *
+from PyQt4.QtCore import *
+from PyQt4.QtGui import *
+import os
+import sys
+import re
+from PyQt4 import QtCore, QtGui, uic
 
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
     os.path.dirname(__file__), 'get_elevation_dialog_base.ui'))
@@ -44,6 +51,7 @@ class GetElevationDialog(QtGui.QDialog, FORM_CLASS):
         self.layerInputMode.toggled.connect(self.radio_input_layer)
         self.extentInputMode.toggled.connect(self.radio_input_extent)
         self.fileOutput.toggled.connect(self.radio_output)
+        self.getExtent.clicked.connect(self.get_extent)
         self.oldPath = ''
 
     ###################
@@ -64,6 +72,8 @@ class GetElevationDialog(QtGui.QDialog, FORM_CLASS):
         self.extentInputS.setVisible(False)
         self.extentInputL.setVisible(False)
         self.extentInputW.setVisible(False)
+        self.getExtent.setVisible(False)
+        self.extentInputInterval.setText("0.010000")
 
     def radio_input_layer(self):
         """Choose between output as memory layer or as shapefile"""
@@ -74,7 +84,6 @@ class GetElevationDialog(QtGui.QDialog, FORM_CLASS):
             self.layersInput.setVisible(True)
         else:
             self.labelLayer.setEnabled(False)
-            self.layersInput.clear()
             self.layersInput.setEnabled(False)
             self.labelLayer.setVisible(False)
             self.layersInput.setVisible(False)
@@ -104,6 +113,7 @@ class GetElevationDialog(QtGui.QDialog, FORM_CLASS):
             self.extentInputS.setVisible(True)
             self.extentInputL.setVisible(True)
             self.extentInputW.setVisible(True)
+            self.getExtent.setVisible(True)
         else:
             self.labelExtent.setEnabled(False)
             self.labelExtentN.setEnabled(False)
@@ -111,7 +121,6 @@ class GetElevationDialog(QtGui.QDialog, FORM_CLASS):
             self.labelExtentL.setEnabled(False)
             self.labelExtentW.setEnabled(False)
             self.labelExtentInterval.setEnabled(False)
-            self.extentInputInterval.clear()
             self.extentInputInterval.setEnabled(False)
             self.extentInputN.clear()
             self.extentInputN.setEnabled(False)
@@ -132,7 +141,17 @@ class GetElevationDialog(QtGui.QDialog, FORM_CLASS):
             self.extentInputS.setVisible(False)
             self.extentInputL.setVisible(False)
             self.extentInputW.setVisible(False)
+            self.getExtent.setVisible(False)
 
+    def get_extent(self):
+        xmin=iface.mapCanvas().extent().xMinimum()
+        xmax=iface.mapCanvas().extent().xMaximum()
+        ymin=iface.mapCanvas().extent().yMinimum()
+        ymax=iface.mapCanvas().extent().yMaximum()
+        self.extentInputW.setText(str(xmin))
+        self.extentInputL.setText(str(xmax))
+        self.extentInputN.setText(str(ymax))
+        self.extentInputS.setText(str(ymin))
 
 
     ###################
